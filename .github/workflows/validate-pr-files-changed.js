@@ -31,6 +31,18 @@ function readNumberFromGithubEvent() {
     return JSON.parse(fs.readFileSync(github_event)).number
 }
 
+function isSemantic(title, type) {
+    return title.match(type + "(.*):");
+}
+
+function isFeature(title) {
+    return isSemantic(title, "feat")
+}
+
+function isFix(title) {
+    return isSemantic(title, "fix")
+}
+
 function validate(number, validator) {
 
     try {
@@ -58,46 +70,38 @@ function validate(number, validator) {
 
 }
 
-function testValidator(semanticType) {
-    return function (title, files) {
-        if (title.match(semanticType + "(.*):")) {
+function validateTest(files) {
+    tests = files.filter(f => f.filename.split(path.sep).includes("test"));
 
-            tests = files.filter(f => f.filename.split(path.sep).includes("test"));
-
-            if (tests.length == 0) {
-                throw new Error(semanticType + "Pull Requests (feat) must contain a change to a test file");
-            };
-        
-        }
-    }
+    if (tests.length == 0) {
+        throw new Error(semanticType + "Pull Requests (feat) must contain a change to a test file");
+    };        
 }
 
-function readmeValidator(semanticType) {
-    return function(title, files) {
+function validateReadme(files) {
+    readmes = files.filter(f => path.basename(f.filename) == "README.md");
 
-        if (title.match(semanticType + "(.*):")) {
-
-            readmes = files.filter(f => path.basename(f.filename) == "README.md");
-
-            if (readmes.length == 0) {
-                throw new Error(semanticType + " Pull Requests (feat) must contain a change to a readme file");
-            };
-    
-        }
-
-    }
+    if (readmes.length == 0) {
+        throw new Error(semanticType + " Pull Requests (feat) must contain a change to a readme file");
+    };
 }
 
 module.exports.featureContainsReadme = function (number) {
-    return validate(number, readmeValidator("feat"));
+    return validate(number, function(title, files) {
+        if (isFeature(title)) validateReadme(files);
+    });
 };
 
 module.exports.featureContainsTest = function (number) {
-    return validate(number, testValidator("feat"));
+    return validate(number, function(title, files) {
+        if (isFeature(title)) validateTest(files);
+    });
 };
 
 module.exports.fixContainsTest = function (number) {
-    return validate(number, testValidator("fix"));
+    return validate(number, function(title, files) {
+        if (isFix(title)) validateTest(files);
+    });
 };
 
 module.exports.all = function (number) {
