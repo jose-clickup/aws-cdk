@@ -36,7 +36,13 @@ function readNumberFromGithubEvent() {
         throw new Error("GITHUB_EVENT_PATH undefined");
     }
 
-    return JSON.parse(fs.readFileSync(github_event)).number
+    number = JSON.parse(fs.readFileSync(github_event)).number
+
+    if (!number) {
+        throw new Error("GitHub Event is not related to a PR");
+    }
+    
+    return number;
 }
 
 function isSemantic(title, type) {
