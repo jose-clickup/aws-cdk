@@ -14,6 +14,8 @@ function createGitHubClient() {
 
     if (token) {
         console.log("Creating authenticated GitHub Client")
+    } else {
+        console.log("Creating un-authenticated GitHub Client")
     }
     
     return new GitHub({'token': token});
@@ -84,10 +86,8 @@ async function mandatoryChanges(number) {
         number = number ? number : readNumberFromGithubEvent();
     } catch (err) {
         throw new Error("Unable to determine PR number: " + err.message 
-            + ". Either pass it as the first argument, or execute from GitHub Acrions.");
+            + ". Either pass it as the first argument, or execute from GitHub Actions.");
     }
-
-    console.log("⌛ Validating...");
     
     try {
 
@@ -98,15 +98,20 @@ async function mandatoryChanges(number) {
         
         const issues = gh.getIssues(OWNER, REPO);
         const repo = gh.getRepo(OWNER, REPO);
-    
+        
+        console.log(`⌛  Fetching PR number ${number}`)
         const issue = (await issues.getIssue(number)).data;
+
+        console.log(`⌛  Fetching files for PR number ${number}`)
         const files = (await repo.listPullRequestFiles(number)).data;
-            
+
+        console.log("⌛  Validating...");
+
         featureContainsReadme(issue, files);
         featureContainsTest(issue, files);
         fixContainsTest(issue, files);
     
-        console.log("✅ success")
+        console.log("✅  success")
         
     } catch (err) {
         
@@ -124,7 +129,7 @@ async function mandatoryChanges(number) {
 
 // this is necessary to make the function runnable from the command line.
 module.exports.mandatoryChanges = async function(number) {
-    await mandatoryChanges();
+    await mandatoryChanges(number);
 }
 
 require('make-runnable/custom')({
