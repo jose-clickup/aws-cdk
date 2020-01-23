@@ -2,7 +2,7 @@
 # https://github.com/actions/toolkit/blob/master/packages/github/src/context.ts
 
 name: Pull Request
-on: pull_request
+on: push
 
 jobs:
   mandatory-changes:
