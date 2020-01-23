@@ -10,6 +10,12 @@ const REPO = "aws-cdk"
 const issues = gh.getIssues(OWNER, REPO);
 const repo = gh.getRepo(OWNER, REPO);
 
+class ValidationFailed extends Error {
+    constructor(message) {
+        super(message);
+    }    
+}
+
 function fetchFiles(number) {
     return repo.listPullRequestFiles(number);
 }
@@ -21,6 +27,8 @@ function fetchIssue(number) {
 function readNumberFromGithubEvent() {
 
     // https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables
+
+    console.log("Extracting PR number from Github Event...");
 
     github_event = process.env.GITHUB_EVENT_PATH;
 
@@ -48,9 +56,8 @@ async function validate(number, validator) {
     try {
         number = number ? number : readNumberFromGithubEvent();
     } catch (err) {
-        console.log("Unable to determine PR number: " + err.message 
-            + ". Either pass it as the first argument, or execute from GitHub Acrions.")
-        process.exit(1);
+        throw new Error("Unable to determine PR number: " + err.message 
+            + ". Either pass it as the first argument, or execute from GitHub Acrions.");
     }
 
     const issue = await fetchIssue(number);
@@ -107,7 +114,14 @@ module.exports.mandatoryChanges = async function(number) {
         console.log("✅ success")
         
     } catch (err) {
-        console.log("❌ Vadlidation failed: " + err.message);
+        
+        if (err instanceof ValidationFailed) {
+            console.log("❌ Vadlidation failed: " + err.message);
+        } else {
+            console.log("❌ Unable to validate: " + err.message);
+            console.log(err.stack)
+        }
+        
         process.exit(1);
     }
     
