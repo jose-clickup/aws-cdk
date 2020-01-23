@@ -43,7 +43,7 @@ function isFix(title) {
     return isSemantic(title, "fix")
 }
 
-function validate(number, validator) {
+async function validate(number, validator) {
 
     try {
         number = number ? number : readNumberFromGithubEvent();
@@ -53,20 +53,10 @@ function validate(number, validator) {
         process.exit(1);
     }
 
-    console.log("⌛ Validating...");
+    const issue = await fetchIssue(number);
+    const files = await fetchFiles(number);
 
-    fetchIssue(number)
-        .then(function (issue) {
-            fetchFiles(number)
-                .then(function (files) {
-                    validator(issue.data.title, files.data);            
-                    console.log("✅ success")
-                })
-        .catch(function (err) {
-            console.log("❌ Vadlidation failed: " + err.message);
-            process.exit(1);
-        })
-    });                
+    validator(issue.data.title, files.data);                    
 
 }
 
@@ -86,33 +76,41 @@ function validateReadme(files) {
     };
 }
 
-module.exports.featureContainsReadme = function (number) {
+async function featureContainsReadme(number) {
     return validate(number, function(title, files) {
         if (isFeature(title)) validateReadme(files);
     });
 };
 
-module.exports.featureContainsTest = function (number) {
+async function featureContainsTest(number) {
     return validate(number, function(title, files) {
         if (isFeature(title)) validateTest(files);
     });
 };
 
-module.exports.fixContainsTest = function (number) {
+async function fixContainsTest(number) {
     return validate(number, function(title, files) {
         if (isFix(title)) validateTest(files);
     });
 };
 
-module.exports.all = function (number) {
-    exports = this;
-    exports.featureContainsReadme(number)
-        .then(function () {
-            exports.featureContainsTest(number)
-                .then(function () {
-                    exports.fixContainsTest(number);
-                })
-        })
+module.exports.mandatoryChanges = async function(number) {
+
+    console.log("⌛ Validating...");
+
+    try {
+    
+        await featureContainsReadme(number);
+        await featureContainsTest(number);
+        await fixContainsTest(number);
+    
+        console.log("✅ success")
+        
+    } catch (err) {
+        console.log("❌ Vadlidation failed: " + err.message);
+        process.exit(1);
+    }
+    
 }
 
 require('make-runnable/custom')({
