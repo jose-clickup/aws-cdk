@@ -21,5 +21,7 @@ jobs:
         run: npm install --only=dev
 
       - name: Validate
+        env:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         run: |
           node ./.github/workflows/on-pr.js mandatoryChanges

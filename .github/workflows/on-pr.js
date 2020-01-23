@@ -1,14 +1,6 @@
 const path = require("path")
 const fs = require("fs")
 const GitHub = require("github-api")
- 
-const gh = new GitHub()
-
-const OWNER = "aws"
-const REPO = "aws-cdk"
-
-const issues = gh.getIssues(OWNER, REPO);
-const repo = gh.getRepo(OWNER, REPO);
 
 class ValidationFailed extends Error {
     constructor(message) {
@@ -16,19 +8,20 @@ class ValidationFailed extends Error {
     }    
 }
 
-function fetchFiles(number) {
-    return repo.listPullRequestFiles(number);
-}
+function createGitHubClient() {
 
-function fetchIssue(number) {
-    return issues.getIssue(number);
+    const token = process.env.GITHUB_TOKEN;
+
+    if (token) {
+        console.log("Creating authenticated GitHub Client")
+    }
+    
+    return new GitHub({'token': token});
 }
 
 function readNumberFromGithubEvent() {
 
     // https://help.github.com/en/actions/automating-your-workflow-with-github-actions/using-environment-variables
-
-    console.log("Extracting PR number from Github Event...");
 
     github_event = process.env.GITHUB_EVENT_PATH;
 
@@ -41,7 +34,7 @@ function readNumberFromGithubEvent() {
     if (!number) {
         throw new Error("GitHub Event is not related to a PR");
     }
-    
+
     return number;
 }
 
@@ -49,28 +42,12 @@ function isSemantic(title, type) {
     return title.match(type + "(.*):");
 }
 
-function isFeature(title) {
-    return isSemantic(title, "feat")
+function isFeature(issue) {
+    return isSemantic(issue.title, "feat")
 }
 
-function isFix(title) {
-    return isSemantic(title, "fix")
-}
-
-async function validate(number, validator) {
-
-    try {
-        number = number ? number : readNumberFromGithubEvent();
-    } catch (err) {
-        throw new Error("Unable to determine PR number: " + err.message 
-            + ". Either pass it as the first argument, or execute from GitHub Acrions.");
-    }
-
-    const issue = await fetchIssue(number);
-    const files = await fetchFiles(number);
-
-    validator(issue.data.title, files.data);                    
-
+function isFix(issue) {
+    return isSemantic(issue.title, "fix")
 }
 
 function validateTest(files) {
@@ -89,33 +66,45 @@ function validateReadme(files) {
     };
 }
 
-async function featureContainsReadme(number) {
-    return validate(number, function(title, files) {
-        if (isFeature(title)) validateReadme(files);
-    });
+function featureContainsReadme(issue, files) {
+    if (isFeature(issue)) validateReadme(files);
 };
 
-async function featureContainsTest(number) {
-    return validate(number, function(title, files) {
-        if (isFeature(title)) validateTest(files);
-    });
+function featureContainsTest(issue, files) {
+    if (isFeature(issue)) validateTest(files);
 };
 
-async function fixContainsTest(number) {
-    return validate(number, function(title, files) {
-        if (isFix(title)) validateTest(files);
-    });
+function fixContainsTest(issue, files) {
+    if (isFix(issue)) validateTest(files);
 };
 
-module.exports.mandatoryChanges = async function(number) {
-
-    console.log("⌛ Validating...");
+async function mandatoryChanges(number) {
 
     try {
+        number = number ? number : readNumberFromGithubEvent();
+    } catch (err) {
+        throw new Error("Unable to determine PR number: " + err.message 
+            + ". Either pass it as the first argument, or execute from GitHub Acrions.");
+    }
+
+    console.log("⌛ Validating...");
     
-        await featureContainsReadme(number);
-        await featureContainsTest(number);
-        await fixContainsTest(number);
+    try {
+
+        const gh = createGitHubClient();
+
+        const OWNER = "aws"
+        const REPO = "aws-cdk"
+        
+        const issues = gh.getIssues(OWNER, REPO);
+        const repo = gh.getRepo(OWNER, REPO);
+    
+        const issue = (await issues.getIssue(number)).data;
+        const files = (await repo.listPullRequestFiles(number)).data;
+            
+        featureContainsReadme(issue, files);
+        featureContainsTest(issue, files);
+        fixContainsTest(issue, files);
     
         console.log("✅ success")
         
@@ -130,7 +119,12 @@ module.exports.mandatoryChanges = async function(number) {
         
         process.exit(1);
     }
-    
+
+}
+
+// this is necessary to make the function runnable from the command line.
+module.exports.mandatoryChanges = async function(number) {
+    await mandatoryChanges();
 }
 
 require('make-runnable/custom')({
